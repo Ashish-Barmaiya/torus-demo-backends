@@ -103,3 +103,59 @@ func TestSizeValid(t *testing.T) {
 		}
 	}
 }
+
+func TestGenerateJSONWithData(t *testing.T) {
+	data := map[string]any{
+		"id":   "usr_000005",
+		"name": "Demo User 5",
+	}
+
+	meta := map[string]any{
+		"service":  "users",
+		"instance": "users-a",
+	}
+
+	tests := []Size{
+		Size1KB,
+		Size16KB,
+		Size64KB,
+		Size256KB,
+		Size1MB,
+		Size4MB,
+	}
+
+	for _, size := range tests {
+		t.Run(size.String(), func(t *testing.T) {
+			body, err := GenerateJSONWithData(size, data, meta)
+			if err != nil {
+				t.Fatalf("GenerateJSONWithData() error: %v", err)
+			}
+
+			if len(body) != int(size) {
+				t.Fatalf(
+					"expected %d bytes, got %d",
+					size,
+					len(body),
+				)
+			}
+
+			var decoded map[string]any
+
+			if err := json.Unmarshal(body, &decoded); err != nil {
+				t.Fatalf("generated payload is not valid JSON: %v", err)
+			}
+
+			if decoded["data"] == nil {
+				t.Fatal("expected data field")
+			}
+
+			if decoded["meta"] == nil {
+				t.Fatal("expected meta field")
+			}
+
+			if decoded["payload"] == nil {
+				t.Fatal("expected payload field")
+			}
+		})
+	}
+}

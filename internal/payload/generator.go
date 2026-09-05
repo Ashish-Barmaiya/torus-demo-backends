@@ -5,15 +5,27 @@ import (
 	"fmt"
 )
 
-const (
-	defaultFiller = "torus-demo-payload"
-)
+const defaultFiller = "torus-demo-payload"
 
 type Envelope struct {
-	Data string `json:"data"`
+	Data    any    `json:"data"`
+	Meta    any    `json:"meta"`
+	Payload string `json:"payload,omitempty"`
 }
 
 func GenerateJSON(target Size) ([]byte, error) {
+	return GenerateJSONWithData(
+		target,
+		nil,
+		nil,
+	)
+}
+
+func GenerateJSONWithData(
+	target Size,
+	data any,
+	meta any,
+) ([]byte, error) {
 	if !target.Valid() {
 		return nil, fmt.Errorf("unsupported payload size: %d", target)
 	}
@@ -22,48 +34,92 @@ func GenerateJSON(target Size) ([]byte, error) {
 		return []byte{}, nil
 	}
 
-	// Generate a JSON document whose encoded size is exactly target bytes.
-	//
-	// The JSON object has a fixed prefix/suffix and a variable-length string.
-	prefix := []byte(`{"data":"`)
-	suffix := []byte(`"}`)
+	envelope := Envelope{
+		Data: data,
+		Meta: meta,
+	}
 
-	if target <= Size(len(prefix)+len(suffix)) {
+	// Build the response structure using a binary-search-style
+	// adjustment because JSON escaping can affect encoded length.
+	low := 0
+	high := int(target)
+
+	for low <= high {
+		mid := (low + high) / 2
+
+		envelope.Payload = makeFiller(mid)
+
+		body, err := json.Marshal(envelope)
+		if err != nil {
+			return nil, fmt.Errorf("marshal response: %w", err)
+		}
+
+		switch {
+		case len(body) < int(target):
+			low = mid + 1
+
+		case len(body) > int(target):
+			high = mid - 1
+
+		default:
+			return body, nil
+		}
+	}
+
+	// Need the exact size, but a JSON string can require escaped bytes.
+	// Find the closest valid result and refine it.
+	best := []byte(nil)
+	bestDistance := int(target)
+
+	for fillerLength := max(0, high-4); fillerLength <= min(int(target), high+4); fillerLength++ {
+		envelope.Payload = makeFiller(fillerLength)
+
+		body, err := json.Marshal(envelope)
+		if err != nil {
+			return nil, fmt.Errorf("marshal response: %w", err)
+		}
+
+		distance := abs(len(body) - int(target))
+
+		if distance < bestDistance {
+			best = body
+			bestDistance = distance
+		}
+
+		if distance == 0 {
+			return body, nil
+		}
+	}
+
+	if best == nil {
 		return nil, fmt.Errorf(
-			"target size %d is too small for JSON envelope",
+			"unable to generate payload near target size %d",
 			target,
 		)
 	}
 
-	fillerLength := int(target) - len(prefix) - len(suffix)
+	return best, nil
+}
 
-	filler := make([]byte, fillerLength)
+func makeFiller(length int) string {
+	if length <= 0 {
+		return ""
+	}
 
 	pattern := []byte(defaultFiller)
+	filler := make([]byte, length)
 
 	for i := range filler {
 		filler[i] = pattern[i%len(pattern)]
 	}
 
-	body := make([]byte, 0, int(target))
-	body = append(body, prefix...)
-	body = append(body, filler...)
-	body = append(body, suffix...)
+	return string(filler)
+}
 
-	if len(body) != int(target) {
-		return nil, fmt.Errorf(
-			"generated payload size mismatch: got %d, want %d",
-			len(body),
-			target,
-		)
+func abs(value int) int {
+	if value < 0 {
+		return -value
 	}
 
-	// Verify that the result is actually valid JSON.
-	var decoded Envelope
-
-	if err := json.Unmarshal(body, &decoded); err != nil {
-		return nil, fmt.Errorf("generated invalid JSON: %w", err)
-	}
-
-	return body, nil
+	return value
 }
