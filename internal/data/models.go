@@ -8,6 +8,12 @@ type User struct {
 	Status string `json:"status"`
 }
 
+type CreateUserRequest struct {
+	Name  string `json:"name"`
+	Email string `json:"email"`
+	Plan  string `json:"plan"`
+}
+
 type Order struct {
 	ID         string `json:"id"`
 	CustomerID string `json:"customer_id"`

@@ -1,0 +1,28 @@
+services:
+  users-a:
+    image: torus-demo-backend:dev
+    environment:
+      SERVICE: users
+      INSTANCE: users-a
+      PORT: 3000
+
+  users-b:
+    image: torus-demo-backend:dev
+    environment:
+      SERVICE: users
+      INSTANCE: users-b
+      PORT: 3000
+
+  orders-a:
+    image: torus-demo-backend:dev
+    environment:
+      SERVICE: orders
+      INSTANCE: orders-a
+      PORT: 3000
+
+  orders-b:
+    image: torus-demo-backend:dev
+    environment:
+      SERVICE: orders
+      INSTANCE: orders-b
+      PORT: 3000
