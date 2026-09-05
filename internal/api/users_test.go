@@ -7,6 +7,7 @@ import (
 	"testing"
 
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/config"
+	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/payload"
 )
 
 func newUsersTestServer() *Server {
@@ -263,5 +264,91 @@ func TestUserDELETEUnsupportedMethod(t *testing.T) {
 			http.StatusMethodNotAllowed,
 			rec.Code,
 		)
+	}
+}
+
+func TestUserResponsePayloadSize(t *testing.T) {
+	cfg := config.Config{
+		Service:  "users",
+		Instance: "users-a",
+		Port:     3000,
+	}
+
+	server := NewServer(cfg)
+
+	tests := []struct {
+		name       string
+		header     string
+		wantStatus int
+		wantLength int
+	}{
+		{
+			name:       "normal response",
+			header:     "",
+			wantStatus: http.StatusOK,
+			wantLength: -1,
+		},
+		{
+			name:       "1kb response",
+			header:     "1kb",
+			wantStatus: http.StatusOK,
+			wantLength: 1 << 10,
+		},
+		{
+			name:       "64kb response",
+			header:     "64kb",
+			wantStatus: http.StatusOK,
+			wantLength: 64 << 10,
+		},
+		{
+			name:       "empty response",
+			header:     "0b",
+			wantStatus: http.StatusOK,
+			wantLength: 0,
+		},
+		{
+			name:       "unsupported response size",
+			header:     "2mb",
+			wantStatus: http.StatusBadRequest,
+			wantLength: -1,
+		},
+	}
+
+	for _, tt := range tests {
+		t.Run(tt.name, func(t *testing.T) {
+			req := httptest.NewRequest(
+				http.MethodGet,
+				"/api/v1/users/1",
+				nil,
+			)
+
+			if tt.header != "" {
+				req.Header.Set(payload.ResponseSizeHeader, tt.header)
+			}
+
+			rec := httptest.NewRecorder()
+
+			server.Handler().ServeHTTP(rec, req)
+
+			if rec.Code != tt.wantStatus {
+				t.Fatalf(
+					"status = %d, want %d",
+					rec.Code,
+					tt.wantStatus,
+				)
+			}
+
+			if tt.wantLength >= 0 && rec.Body.Len() != tt.wantLength {
+				t.Fatalf(
+					"body length = %d, want %d",
+					rec.Body.Len(),
+					tt.wantLength,
+				)
+			}
+
+			if tt.wantLength == -1 && rec.Body.Len() == 0 {
+				t.Fatal("expected normal JSON response body")
+			}
+		})
 	}
 }

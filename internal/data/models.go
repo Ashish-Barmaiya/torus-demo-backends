@@ -49,3 +49,11 @@ type Response[T any] struct {
 	Data T    `json:"data"`
 	Meta Meta `json:"meta"`
 }
+
+func (r Response[T]) ResponseData() any {
+	return r.Data
+}
+
+func (r Response[T]) ResponseMeta() any {
+	return r.Meta
+}

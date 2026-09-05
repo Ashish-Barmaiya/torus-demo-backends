@@ -2,11 +2,13 @@ package payload
 
 import "fmt"
 
-const ResponseSizeHeader = "X-Response-Size"
+const ResponseSizeHeader = "X-Demo-Response-Size"
 
 func ParseSize(value string) (Size, error) {
 	switch value {
 	case "":
+		return SizeEmpty, nil
+	case "0b":
 		return SizeEmpty, nil
 	case "1kb":
 		return Size1KB, nil

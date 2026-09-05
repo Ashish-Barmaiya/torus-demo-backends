@@ -8,6 +8,7 @@ func TestParseSize(t *testing.T) {
 		want  Size
 	}{
 		{"", SizeEmpty},
+		{"0b", SizeEmpty},
 		{"1kb", Size1KB},
 		{"16kb", Size16KB},
 		{"64kb", Size64KB},

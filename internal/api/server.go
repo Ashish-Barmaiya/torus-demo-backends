@@ -8,7 +8,13 @@ import (
 
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/config"
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/data"
+	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/payload"
 )
+
+type jsonResponse interface {
+	ResponseData() any
+	ResponseMeta() any
+}
 
 type Server struct {
 	cfg config.Config
@@ -42,7 +48,7 @@ func (s *Server) Handler() http.Handler {
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
-	writeJSON(w, http.StatusOK, map[string]any{
+	writeJSON(w, r, http.StatusOK, map[string]any{
 		"status":   "ok",
 		"service":  s.cfg.Service,
 		"instance": s.cfg.Instance,
@@ -54,6 +60,7 @@ func (s *Server) handleUsers(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(
 			w,
+			r,
 			http.StatusOK,
 			data.Response[[]data.User]{
 				Data: data.Users(),
@@ -97,6 +104,7 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(
 		w,
+		r,
 		http.StatusCreated,
 		data.Response[data.User]{
 			Data: user,
@@ -127,6 +135,7 @@ func (s *Server) handleUser(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(
 			w,
+			r,
 			http.StatusOK,
 			data.Response[data.User]{
 				Data: user,
@@ -185,6 +194,7 @@ func (s *Server) handleUpdateUser(
 
 	writeJSON(
 		w,
+		r,
 		http.StatusOK,
 		data.Response[data.User]{
 			Data: user,
@@ -203,6 +213,7 @@ func (s *Server) handleDeleteUser(
 ) {
 	writeJSON(
 		w,
+		r,
 		http.StatusOK,
 		data.Response[map[string]any]{
 			Data: map[string]any{
@@ -222,6 +233,7 @@ func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(
 			w,
+			r,
 			http.StatusOK,
 			data.Response[[]data.Order]{
 				Data: data.Orders(),
@@ -259,6 +271,7 @@ func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 	case http.MethodGet:
 		writeJSON(
 			w,
+			r,
 			http.StatusOK,
 			data.Response[data.Order]{
 				Data: order,
@@ -305,6 +318,7 @@ func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
 
 	writeJSON(
 		w,
+		r,
 		http.StatusCreated,
 		data.Response[data.Order]{
 			Data: order,
@@ -345,6 +359,7 @@ func (s *Server) handleUpdateOrder(
 
 	writeJSON(
 		w,
+		r,
 		http.StatusOK,
 		data.Response[data.Order]{
 			Data: order,
@@ -363,6 +378,7 @@ func (s *Server) handleDeleteOrder(
 ) {
 	writeJSON(
 		w,
+		r,
 		http.StatusOK,
 		data.Response[map[string]any]{
 			Data: map[string]any{
@@ -377,11 +393,59 @@ func (s *Server) handleDeleteOrder(
 	)
 }
 
-func writeJSON(w http.ResponseWriter, status int, value any) {
+func writeJSON(
+	w http.ResponseWriter,
+	r *http.Request,
+	status int,
+	value any,
+) {
 	w.Header().Set("Content-Type", "application/json")
-	w.WriteHeader(status)
 
-	_ = json.NewEncoder(w).Encode(value)
+	responseSizeHeader := r.Header.Values(payload.ResponseSizeHeader)
+
+	if len(responseSizeHeader) == 0 {
+		w.WriteHeader(status)
+		_ = json.NewEncoder(w).Encode(value)
+		return
+	}
+
+	size, err := payload.ParseSize(responseSizeHeader[0])
+	if err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if size == payload.SizeEmpty {
+		w.WriteHeader(status)
+		return
+	}
+
+	response, ok := value.(jsonResponse)
+	if !ok {
+		http.Error(
+			w,
+			"response does not support payload generation",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	body, err := payload.GenerateJSONWithData(
+		size,
+		response.ResponseData(),
+		response.ResponseMeta(),
+	)
+	if err != nil {
+		http.Error(
+			w,
+			"failed to generate response payload",
+			http.StatusInternalServerError,
+		)
+		return
+	}
+
+	w.WriteHeader(status)
+	_, _ = w.Write(body)
 }
 
 func loggingMiddleware(cfg config.Config, next http.Handler) http.Handler {
