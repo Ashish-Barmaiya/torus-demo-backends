@@ -218,31 +218,31 @@ func (s *Server) handleDeleteUser(
 }
 
 func (s *Server) handleOrders(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
-	writeJSON(
-		w,
-		http.StatusOK,
-		data.Response[[]data.Order]{
-			Data: data.Orders(),
-			Meta: data.Meta{
-				Service:  s.cfg.Service,
-				Instance: s.cfg.Instance,
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(
+			w,
+			http.StatusOK,
+			data.Response[[]data.Order]{
+				Data: data.Orders(),
+				Meta: data.Meta{
+					Service:  s.cfg.Service,
+					Instance: s.cfg.Instance,
+				},
 			},
-		},
-	)
+		)
+
+	case http.MethodPost:
+		s.handleCreateOrder(w, r)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	rawID := strings.TrimPrefix(r.URL.Path, "/api/v1/orders/")
+
 	id, err := strconv.Atoi(rawID)
 	if err != nil {
 		http.Error(w, "invalid order id", http.StatusBadRequest)
@@ -255,11 +255,120 @@ func (s *Server) handleOrder(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(
+			w,
+			http.StatusOK,
+			data.Response[data.Order]{
+				Data: order,
+				Meta: data.Meta{
+					Service:  s.cfg.Service,
+					Instance: s.cfg.Instance,
+				},
+			},
+		)
+
+	case http.MethodPatch:
+		s.handleUpdateOrder(w, r, order)
+
+	case http.MethodDelete:
+		s.handleDeleteOrder(w, r, order)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleCreateOrder(w http.ResponseWriter, r *http.Request) {
+	defer r.Body.Close()
+
+	var req data.CreateOrderRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := validateCreateOrderRequest(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	order := data.Order{
+		ID:         "ord_demo_created",
+		CustomerID: req.CustomerID,
+		Status:     "pending",
+		Currency:   strings.ToUpper(req.Currency),
+		Total:      req.Total,
+	}
+
+	writeJSON(
+		w,
+		http.StatusCreated,
+		data.Response[data.Order]{
+			Data: order,
+			Meta: data.Meta{
+				Service:  s.cfg.Service,
+				Instance: s.cfg.Instance,
+			},
+		},
+	)
+}
+
+func (s *Server) handleUpdateOrder(
+	w http.ResponseWriter,
+	r *http.Request,
+	order data.Order,
+) {
+	defer r.Body.Close()
+
+	var req data.UpdateOrderRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := validateUpdateOrderRequest(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Status != nil {
+		order.Status = *req.Status
+	}
+
+	if req.Total != nil {
+		order.Total = *req.Total
+	}
+
 	writeJSON(
 		w,
 		http.StatusOK,
 		data.Response[data.Order]{
 			Data: order,
+			Meta: data.Meta{
+				Service:  s.cfg.Service,
+				Instance: s.cfg.Instance,
+			},
+		},
+	)
+}
+
+func (s *Server) handleDeleteOrder(
+	w http.ResponseWriter,
+	r *http.Request,
+	order data.Order,
+) {
+	writeJSON(
+		w,
+		http.StatusOK,
+		data.Response[map[string]any]{
+			Data: map[string]any{
+				"id":      order.ID,
+				"deleted": true,
+			},
 			Meta: data.Meta{
 				Service:  s.cfg.Service,
 				Instance: s.cfg.Instance,

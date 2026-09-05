@@ -29,6 +29,17 @@ type Order struct {
 	Total      int64  `json:"total"`
 }
 
+type CreateOrderRequest struct {
+	CustomerID string `json:"customer_id"`
+	Currency   string `json:"currency"`
+	Total      int64  `json:"total"`
+}
+
+type UpdateOrderRequest struct {
+	Status *string `json:"status,omitempty"`
+	Total  *int64  `json:"total,omitempty"`
+}
+
 type Meta struct {
 	Service  string `json:"service"`
 	Instance string `json:"instance"`
