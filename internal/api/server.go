@@ -9,6 +9,7 @@ import (
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/config"
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/data"
 	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/payload"
+	"github.com/Ashish-Barmaiya/torus-demo-backends/internal/simulation"
 )
 
 type jsonResponse interface {
@@ -21,7 +22,9 @@ type Server struct {
 }
 
 func NewServer(cfg config.Config) *Server {
-	return &Server{cfg: cfg}
+	return &Server{
+		cfg: cfg,
+	}
 }
 
 func (s *Server) Handler() http.Handler {
@@ -44,7 +47,7 @@ func (s *Server) Handler() http.Handler {
 		})
 	}
 
-	return loggingMiddleware(s.cfg, mux)
+	return loggingMiddleware(s.cfg, simulation.Middleware(mux))
 }
 
 func (s *Server) handleHealth(w http.ResponseWriter, r *http.Request) {
