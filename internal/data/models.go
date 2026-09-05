@@ -14,6 +14,13 @@ type CreateUserRequest struct {
 	Plan  string `json:"plan"`
 }
 
+type UpdateUserRequest struct {
+	Name   *string `json:"name,omitempty"`
+	Email  *string `json:"email,omitempty"`
+	Plan   *string `json:"plan,omitempty"`
+	Status *string `json:"status,omitempty"`
+}
+
 type Order struct {
 	ID         string `json:"id"`
 	CustomerID string `json:"customer_id"`

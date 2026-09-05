@@ -109,12 +109,8 @@ func (s *Server) handleCreateUser(w http.ResponseWriter, r *http.Request) {
 }
 
 func (s *Server) handleUser(w http.ResponseWriter, r *http.Request) {
-	if r.Method != http.MethodGet {
-		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
-		return
-	}
-
 	rawID := strings.TrimPrefix(r.URL.Path, "/api/v1/users/")
+
 	id, err := strconv.Atoi(rawID)
 	if err != nil {
 		http.Error(w, "invalid user id", http.StatusBadRequest)
@@ -127,11 +123,92 @@ func (s *Server) handleUser(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	switch r.Method {
+	case http.MethodGet:
+		writeJSON(
+			w,
+			http.StatusOK,
+			data.Response[data.User]{
+				Data: user,
+				Meta: data.Meta{
+					Service:  s.cfg.Service,
+					Instance: s.cfg.Instance,
+				},
+			},
+		)
+
+	case http.MethodPatch:
+		s.handleUpdateUser(w, r, user)
+
+	case http.MethodDelete:
+		s.handleDeleteUser(w, r, user)
+
+	default:
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+	}
+}
+
+func (s *Server) handleUpdateUser(
+	w http.ResponseWriter,
+	r *http.Request,
+	user data.User,
+) {
+	defer r.Body.Close()
+
+	var req data.UpdateUserRequest
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid JSON body", http.StatusBadRequest)
+		return
+	}
+
+	if err := validateUpdateUserRequest(req); err != nil {
+		http.Error(w, err.Error(), http.StatusBadRequest)
+		return
+	}
+
+	if req.Name != nil {
+		user.Name = *req.Name
+	}
+
+	if req.Email != nil {
+		user.Email = *req.Email
+	}
+
+	if req.Plan != nil {
+		user.Plan = *req.Plan
+	}
+
+	if req.Status != nil {
+		user.Status = *req.Status
+	}
+
 	writeJSON(
 		w,
 		http.StatusOK,
 		data.Response[data.User]{
 			Data: user,
+			Meta: data.Meta{
+				Service:  s.cfg.Service,
+				Instance: s.cfg.Instance,
+			},
+		},
+	)
+}
+
+func (s *Server) handleDeleteUser(
+	w http.ResponseWriter,
+	r *http.Request,
+	user data.User,
+) {
+	writeJSON(
+		w,
+		http.StatusOK,
+		data.Response[map[string]any]{
+			Data: map[string]any{
+				"id":      user.ID,
+				"deleted": true,
+			},
 			Meta: data.Meta{
 				Service:  s.cfg.Service,
 				Instance: s.cfg.Instance,
